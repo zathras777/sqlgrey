@@ -59,7 +59,6 @@ my %dflt;
 $dflt{loglevel}           = 2; # used for $dflt{log} entries in read_conffile()
 $dflt{user}               = 'sqlgrey';
 $dflt{group}              = 'sqlgrey';
-$dflt{inet}               = '2501';
 $dflt{pidfile}            = '/var/run/sqlgrey.pid';
 $dflt{conf_dir}           = '/etc/sqlgrey';
 $dflt{reconnect_delay}    = 5;            # 5 minutes
@@ -122,6 +121,10 @@ my $reload = 0; # non-zero signals a regexps/whitelists reload request
 
 my $ref_to_sqlgrey; # we need this global var to access sqlgrey functions
                     # in signal handlers
+
+# non-configurable defaults
+my $proto = 'tcp';
+my $port  = 'localhost:2501';
 
 sub mylog($$$$) {
     my ($self, $logtype, $loglevel, $message) = @_;
@@ -2584,8 +2587,16 @@ sub main()
     }
 
     # bind only localhost if no host is specified
-    if(defined $dflt{inet} and $dflt{inet}=~/^\d+$/) {
-        $dflt{inet} = "localhost:$dflt{inet}";
+    if(defined $dflt{inet}) {
+	$proto = "tcp";
+	if ($dflt{inet}=~/^\d+$/) {
+	    $port = "localhost:$dflt{inet}";
+	} else {
+	    $port = $dflt{inet};
+	}
+    } elsif (defined $dflt{unix}) {
+	$proto = "unix";
+	$port = $dflt{unix} ."|unix";
     }
 
     # set the actual reject code values
@@ -2610,8 +2621,8 @@ sub main()
     my $server = bless {
         server => {
             commandline     => [ $0, @ARGV_saved ],
-            port            => [ $dflt{inet} ],
-            proto           => 'tcp',
+            port            => [ $port ],
+            proto           => $proto,
             user            => $dflt{user},
 	    group           => $dflt{group},
             setsid          => $opt{daemonize} ? 1 : undef,
@@ -2680,6 +2691,16 @@ sub main()
 ####################################
 ## Net::Server::Multiplex methods ##
 ####################################
+
+sub post_bind_hook()
+{
+    my ($self) = @_;
+
+    # unix socket permissions should be 666
+    if($self->{server}{port}[0] =~ /^(.*)\|unix$/) {
+	chmod 0666, $1;
+    }
+}
 
 # Called before the first query comes.
 sub pre_loop_hook() {
