@@ -72,6 +72,7 @@ $dflt{db_type}            = 'Pg';
 $dflt{db_name}            = 'sqlgrey';
 $dflt{db_host}            = 'localhost';
 $dflt{db_port}            = 'default';
+$dflt{db_dsn}             = '';
 $dflt{db_user}            = 'sqlgrey';
 $dflt{db_pass}            = '';
 $dflt{db_prepare_cache}   = 0;
@@ -205,11 +206,11 @@ sub db_unavailable($) {
     if ($self->{sqlgrey}{db_available}) {
 	if (! defined $self->{sqlgrey}{dbh}) {
 	    $self->{sqlgrey}{warn_db} && $self->sendmail('SQLgrey lost database',
-							 'SQLgrey lost database connection to: ' . $self->cnctinfo());
+							 'SQLgrey lost database connection to: ' . $self->{sqlgrey}{db_dsn});
 	} else {
 	    $self->disconnectdb();
 	    $self->{sqlgrey}{warn_db} && $self->sendmail('SQLgrey database error',
-							 'SQLgrey encountered an SQL error and triggered a reconnection to: ' . $self->cnctinfo());
+							 'SQLgrey encountered an SQL error and triggered a reconnection to: ' . $self->{sqlgrey}{db_dsn});
 	}
 	$self->{sqlgrey}{db_available} = 0;
     }
@@ -220,7 +221,7 @@ sub db_available($) {
 
     if (! $self->{sqlgrey}{db_available}) {
 	$self->{sqlgrey}{warn_db} && $self->sendmail('SQLgrey recovered DB',
-			'SQLgrey established connection to: ' . $self->cnctinfo());
+			'SQLgrey established connection to: ' . $self->{sqlgrey}{db_dsn});
 	$self->{sqlgrey}{db_available} = 1;
     }
 }
@@ -775,28 +776,6 @@ sub upgrade2($) {
     $self->setconfig('version','3');
 }
 
-# Build a connect string for DBI
-sub cnctinfo($) {
-# Tested with PostgreSQL, MySQL and SQLite
-    my $self = shift;
-    my $dsn = 'DBI:' . $self->{sqlgrey}{db_type};
-    # only MySQL uses database=
-    if ($self->MySQL()) {
-        $dsn .= ':database=';
-    } else {
-        $dsn .= ':dbname=';
-    }
-    $dsn .= $self->{sqlgrey}{db_name};
-    # only SQLite doesn't require a hostname or port
-    if (! $self->SQLite()) {
-        $dsn .= ';host=' . $self->{sqlgrey}{db_host};
-        if ($self->{sqlgrey}{db_port} ne "default") {
-            $dsn .= ';port=' . $self->{sqlgrey}{db_port};
-        }
-    }
-    return $dsn;
-}
-
 # Global DB Init code
 sub initdb($) {
     my $self = shift;
@@ -819,7 +798,7 @@ sub connectdb($) {
     no warnings 'uninitialized'; #Perl will spew warn's if running DBI only
     if ($dflt{db_cluster} ne 'on') {
 
-    	$self->{sqlgrey}{dbh} = DBI->connect($self->cnctinfo(),
+    	$self->{sqlgrey}{dbh} = DBI->connect($self->{sqlgrey}{db_dsn},
 					     $self->{sqlgrey}{db_user},
 					     $self->{sqlgrey}{db_pass},
 					     $options)
@@ -845,7 +824,7 @@ sub connectdb($) {
     	$DBIx::DBCluster::WRITE_HOSTS_NEVER_READ=1;
 
     	$self->{sqlgrey}{dbh} =
-	    DBIx::DBCluster->connect($self->cnctinfo(),
+	    DBIx::DBCluster->connect($self->{sqlgrey}{db_dsn},
 				     $self->{sqlgrey}{db_user},
 				     $self->{sqlgrey}{db_pass},
 				     $options)
@@ -2599,6 +2578,35 @@ sub main()
 	$port = $dflt{unix} ."|unix";
     }
 
+    # Make a new DSN or verify supplied DSN
+    if ($dflt{db_dsn} ne '') {
+	my @res = DBI->parse_dsn($dflt{db_dsn})
+            or die ('Error parsing db_dsn');
+	if ((defined $res[1]) && $res[1] ne '') {
+	    $dflt{db_type} = $res[1];
+	} else {
+	    die ('db_dsn is missing a database driver');
+	}
+    } else {
+        my $dsn;
+	$dsn = 'DBI:' . $dflt{db_type};
+	# only MySQL uses database=
+	if ($dflt{db_type} eq 'mysql') {
+	    $dsn .= ':database=';
+	} else {
+	    $dsn .= ':dbname=';
+	}
+	$dsn .= $dflt{db_name};
+	# only SQLite doesn't require a hostname or port
+	if ($dflt{db_type} ne 'SQLite') {
+	    $dsn .= ';host=' . $dflt{db_host};
+	    if ($dflt{db_port} ne "default") {
+	        $dsn .= ';port=' . $dflt{db_port};
+	    }
+	}
+	$dflt{db_dsn} = $dsn;
+    }
+
     # set the actual reject code values
     if ($dflt{reject_first_attempt} eq 'delay') {
     	$dflt{reject_first_attempt} = 'defer_if_permit';
@@ -2656,6 +2664,7 @@ sub main()
             db_name         => $dflt{db_name},
             db_host         => $dflt{db_host},
             db_port         => $dflt{db_port},
+            db_dsn          => $dflt{db_dsn},
 	    db_user         => $dflt{db_user},
             db_pass         => $dflt{db_pass},
 	    db_available    => 1, # used to trigger e-mails
