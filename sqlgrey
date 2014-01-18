@@ -2507,13 +2507,14 @@ sub read_conffile($)
     }
     # file locations
     # whitelist files
-    $stat_ip_whitelist_file   = $dflt{conf_dir} . '/clients_ip_whitelist';
-    $dyn_ip_whitelist_file    = $dflt{conf_dir} . '/clients_ip_whitelist.local';
-    $stat_fqdn_whitelist_file = $dflt{conf_dir} . '/clients_fqdn_whitelist';
-    $dyn_fqdn_whitelist_file  = $dflt{conf_dir} . '/clients_fqdn_whitelist.local';
+    $stat_ip_whitelist_file      = $dflt{conf_dir} . '/clients_ip_whitelist';
+    $dyn_ip_whitelist_file       = $dflt{conf_dir} . '/clients_ip_whitelist.local';
+    $stat_fqdn_whitelist_file    = $dflt{conf_dir} . '/clients_fqdn_whitelist';
+    $dyn_fqdn_whitelist_file     = $dflt{conf_dir} . '/clients_fqdn_whitelist.local';
     # regexp files
-    $smtp_server_regexp_file  = $dflt{conf_dir} . '/smtp_server.regexp';
-    $dyn_fqdn_regexp_file     = $dflt{conf_dir} . '/dyn_fqdn.regexp';
+    $smtp_server_regexp_file     = $dflt{conf_dir} . '/smtp_server.regexp';
+    $dyn_fqdn_regexp_file        = $dflt{conf_dir} . '/dyn_fqdn.regexp';
+    $discrimination_regexp_file  = $dflt{conf_dir} . '/discrimination.regexp';
 }
 
 # Setup the environment
